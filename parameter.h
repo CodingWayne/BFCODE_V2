@@ -55,7 +55,14 @@ double reitestar, pitch;
 int ite;
 char str[50];
 int i, j;
-//---網格變數---
+/*-------------------------網格變數---------------------------
+ *meshload為判斷變數，抓完網格後=1
+ *minCellid為最小網格編號
+ *threadboy為判斷變數，等於1時表此時用單一process開啟對應之mesh檔，此時建立newsize矩陣及threadnumber矩陣，分別開啟各thread%d_%d.txt，輸入pid到threadnumber,size到newsize裡
+ *allsize=newsize矩陣各元素加總，但是不等於圓盤網格數(會有重複項)
+ *kk為占=暫存變數
+ *numb,non僅為記錄用
+ */
 int  meshload,minCellid,np, threadboy, * newsize, * threadnumber, all_size ;
 double** mesh;
 int numb, kk;

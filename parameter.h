@@ -62,11 +62,22 @@ int i, j;
  *allsize=newsize矩陣各元素加總，但是不等於圓盤網格數(會有重複項)
  *kk為占=暫存變數
  *numb,non僅為記錄用
+ * tmp_size為暫存size的變數
  */
-int  meshload,minCellid,np, threadboy, * newsize, * threadnumber, all_size ;
+int  meshload,minCellid,np, threadboy, * newsize, * threadnumber, all_size ,tmp_size;
 double** mesh;
 int numb, kk;
 double non;
+double **tmp_Cell_id,**tmp_centroid,**tmp_Velocity;
+void MESH_STEP_1();
+void MESH_STEP_2();
+void MESH_STEP_3();
+void MESH_STEP_4();
+void MESH_STEP_5(struct BFKIN* bfkin);
+void MESH_STEP_6();
+void MESH_STEP_7();
+void MESH_STEP_8(struct BFKIN* bfkin);
+void MESH_STEP_9(struct BFKIN* bfkin);
 //-------------
 void Load_bfkin(struct BFKIN* bfkin);
 void Output_bfkin(struct BFKIN* bfkin, double* reitestar, double* pitch);

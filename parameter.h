@@ -50,12 +50,29 @@ struct BFKIN
 	double* bfkin_hub;
 
 };
-double reitestar, pitch;
 
+//---------------------prop.geo變數------------------------------------------------
+char adm1[100], adm2[100], adm3[100], adm4[100], adm5[100], adm6[100];
+void Load_PROP_ADM();
+void CHECK_PROP_ADM();
+char geoname[50];
+struct PROP
+{
+	//NX:number of radii for the input geometry parameters for patpans11; NBLADE:number fo blades;  MR:number of spanwise panels in patpans11
+	int NX,NBLADE,NC,MR,NTMP,NHBU,MHBT;
+	double RHUB,XHBU,XHBD,XHBT,ADVCO,RULT,RHULT,DCD,XULT,DTPROP,XUWDK;//ADVCO:advance coefficient(Js=Vs/n/D)，用以儲存.geo之J值，或前一輪hXXX.geo之J值，用於牛頓法找J值
+	double** NPARAMETER;//NPARAMETER[][]:用以儲存prop.geo第四行之後的數值;
+};
+void Load_PROP_GEO(struct PROP* prop);
+void Output_PROP_GEO(struct PROP* prop);
+//--------------------------------------------------------------------------------
+double reitestar, pitch;
+FILE* fp5, * fp3, * fp, * fp1;
 int ite;
-char str[50];
+char str[50],label[100];
 int i, j;
-/*-------------------------網格變數---------------------------
+
+/*-------------------------網格變數------------------------------------------------------
  *meshload為判斷變數，抓完網格後=1
  *minCellid為最小網格編號
  *threadboy為判斷變數，等於1時表此時用單一process開啟對應之mesh檔，此時建立newsize矩陣及threadnumber矩陣，分別開啟各thread%d_%d.txt，輸入pid到threadnumber,size到newsize裡
@@ -78,7 +95,7 @@ void MESH_STEP_6();
 void MESH_STEP_7();
 void MESH_STEP_8(struct BFKIN* bfkin);
 void MESH_STEP_9(struct BFKIN* bfkin);
-//-------------
+//-------------------------------------------------------------------------------------
 void Load_bfkin(struct BFKIN* bfkin);
 void Output_bfkin(struct BFKIN* bfkin, double* reitestar, double* pitch);
 

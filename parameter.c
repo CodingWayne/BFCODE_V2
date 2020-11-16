@@ -60,6 +60,76 @@ void Output_bfkin(struct BFKIN* bfkin, double* reitestar, double* pitch)
 	fclose(fp3);
 }
 
+void Load_PROP_ADM()
+{
+	fp = fopen("prop.adm", "r");
+	fgets(adm1, 100, fp);
+	fgets(adm2, 100, fp);
+	fgets(adm3, 100, fp);
+	fgets(adm4, 100, fp);
+	fgets(adm5, 100, fp);
+	fgets(adm6, 100, fp);
+	fclose(fp);
+	debug("prop.adm load!", getpid());
+}
+void CHECK_PROP_ADM()
+{
+	fp3 = fopen("Check_propadm.dat", "w");
+	fprintf(fp3, adm1);
+	fprintf(fp3, adm2);
+	fprintf(fp3, adm3);
+	fprintf(fp3, adm4);
+	fprintf(fp3, adm5);
+	fprintf(fp3, adm6);
+	fclose(fp3);
+	debug("prop.adm check!", getpid());
+}
+void Load_PROP_GEO(struct PROP* prop)
+{
+	sprintf(geoname, "prop.geo");
+	fp = fopen(geoname, "r");
+	fgets(label, 100, fp);
+	fscanf(fp, "%d%d%d%d%d", &prop->NX, &prop->NBLADE, &prop->NC, &prop->MR, &prop->NTMP);
+	fscanf(fp, "%lf%d%d%lf%lf%lf", &prop->RHUB, &prop->NHBU, &prop->MHBT, &prop->XHBU, &prop->XHBD, &prop->XHBT);
+	fscanf(fp, "%lf%lf%lf%lf%lf%lf%lf", &prop->ADVCO, &prop->RULT, &prop->RHULT, &prop->DCD, &prop->XULT, &prop->DTPROP, &prop->XUWDK);
+	prop->NPARAMETER = (double**)malloc(14 * sizeof(double*)); //用以儲存prop.geo第四行之後的數值 
+	for (i = 0; i != 14; i++)
+	{
+		prop->NPARAMETER[i] = (double*)malloc(prop->NX * sizeof(double));
+	}
+	for (j = 0; j != 14; ++j)
+	{
+		for (i = 0; i != prop->NX; ++i)
+		{
+			fscanf(fp, "%lf", &prop->NPARAMETER[j][i]);
+		}
+					
+	}
+		
+	fclose(fp);
+	debug("*.geo load!", getpid());
+}
+
+void Output_PROP_GEO(struct PROP* prop)
+{
+	sprintf(geoname, "propgeo_check.dat");
+	fp = fopen(geoname, "w");
+	fprintf(fp, "prop\n");
+	fprintf(fp, "%d %d %d %d %d \n", prop->NX, prop->NBLADE, prop->NC, prop->MR, prop->NTMP);
+	fprintf(fp, "%.3lf %d %d %.4lf %.4lf %.4lf\n", prop->RHUB, prop->NHBU, prop->MHBT, prop->XHBU, prop->XHBD, prop->XHBT);
+	fprintf(fp, "%.3lf %.3lf %.3lf %.3lf %.3lf %.3lf %.3lf\n", prop->ADVCO, prop->RULT, prop->RHULT, prop->DCD, prop->XULT, prop->DTPROP, prop->XUWDK);
+	for (i = 0; i < 14;i++)
+	{
+		for (j = 0; j < prop->NX; j++)
+		{
+			fprintf(fp, "%.5lf\t", prop->NPARAMETER[i][j]);
+		}
+		fprintf(fp,"\n");
+	}
+	fclose(fp);
+	debug("*.geo Output!", getpid());
+}
+
 void MESH_STEP_1()
 {
 	/*

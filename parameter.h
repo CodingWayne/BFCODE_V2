@@ -55,6 +55,7 @@ struct BFKIN
 char adm1[100], adm2[100], adm3[100], adm4[100], adm5[100], adm6[100];
 void Load_PROP_ADM();
 void CHECK_PROP_ADM();
+void Output_ite_ADM();
 char geoname[50];
 struct PROP
 {
@@ -64,13 +65,29 @@ struct PROP
 	double** NPARAMETER;//NPARAMETER[][]:用以儲存prop.geo第四行之後的數值;
 };
 void Load_PROP_GEO(struct PROP* prop);
-void Output_PROP_GEO(struct PROP* prop);
+void Output_PROP_GEO(struct PROP* prop, struct BFKIN* bfkin);
+
 //--------------------------------------------------------------------------------
 double reitestar, pitch;
-FILE* fp5, * fp3, * fp, * fp1;
+FILE* fp5, * fp3, * fp, * fp1,*fp2;
 int ite;
-char str[50],label[100];
+char str[50],label[100],cmd[50],filename[50];
 int i, j;
+double PI;
+double r,theta;//r:用以儲存網格所在的半徑大小 theta:用以儲存網格所在的徑度大小 R:圓盤半徑 x:圓盤厚度 xp;在x軸上的位置
+double HULLDRAG, THRUST, THRUST0, KT, KT0, ADVCO0, Error, W, Err, Err0;
+/*HULLDRAG:用於儲存hulldrag.csv裡的最後一項(也就是每一輪之前一步的drag) 
+* THRUST:用以儲存有效推力,或前一輪之有效推力 
+* THRUST0:用以儲存前二輪之有效推力
+* KT:用以儲存hXXX.oup裡的CD=0.0035之KT值，或前一輪之hXXX.oup裡的CD=0.0035之KT值，用於計算THRUST; 
+* KT0:用以儲存前二輪之hXXX.oup裡的CD=0.0035之KT值，用於計算THRUST0; 
+* ADVCO0:儲存前二輪hXXX.geo之J值，用於牛頓法找J值;
+* Error:有效阻力與有效推力的差值;
+* W:用以儲存W.dat裡的數值(hXXX.oup裡的1-w); 
+* Err:用以儲存前一輪之Error; 
+* Err0:用以儲存前二輪之Error;
+*/
+double Ktoj, ja;
 
 /*-------------------------網格變數------------------------------------------------------
  *meshload為判斷變數，抓完網格後=1
@@ -98,6 +115,16 @@ void MESH_STEP_9(struct BFKIN* bfkin);
 //-------------------------------------------------------------------------------------
 void Load_bfkin(struct BFKIN* bfkin);
 void Output_bfkin(struct BFKIN* bfkin, double* reitestar, double* pitch);
-
+//-------------------------------------------------------------------------------------
+double *Vx_ave,*Vt_ave,*Vr_ave,*Vx_sum,*Vt_sum,*Vr_sum,*r_ave,*r_sum,*n;
+double *fx,*fr,*ft,*bfx,*bfr,*bft,*r_F,*r_x,*r_U,*Vx_total,*Vt_total,*Vr_total,*Ux,*Ut,*Ur,*Ux_bem,*Ut_bem,*Ur_bem;
+//r_x[]:用以儲存葉片垂向分段(MR個段)裡，包含頭尾之每點的r/R，數量為MR+1個，(垂向分段為sine spanwise) 
+//r_F[]:用以儲存patpans11.exe計算之力的徑向位置，數量為MR個，(垂向分段為sine spanwise) 
+//fx[],fr[],ft[]:patpans11.exe計算之力?
+//bfx[],bfr[],bft[] = fx~r~t[i]/0.5*rho*Vs*Vs*(r_x[i+1]-r_x[i])*R;
+//Vx_total[],Vt_total[],Vr_total[]:用以儲存各徑向位置網格之周向平均速度  SPLINE成 NX 個點後的結果，當作圓盤中心面之入流速度
+//r_U[]:用以儲存sfpv11.exe計算之誘導速度的徑向位置，數量為MR個，(垂向分段為sine spanwise) 
+//Ux[],Ut[],Ur[]:用以儲存sfpv11.exe計算之各徑向位置的誘導速度與船速的比值(Vinduced/Vs)，數量為MR個
+//Ux_bem[],Ut_bem[],Ur_bem[]:用以儲存sfpv11.exe計算之各徑向位置的誘導速度與船速的比值(Vinduced/Vs) SPLINE成 NX 個點後的結果，當作圓盤中心面之誘導速度
 
 #endif

@@ -21,7 +21,7 @@ void Load_bfkin(struct BFKIN* bfkin)
 	fclose(fp);
 }
 
-void Output_bfkin(struct BFKIN* bfkin, double* reitestar, double* pitch)
+void Output_bfkin(struct BFKIN* bfkin, int* reitestar, double* pitch)
 {
 	int i;
 	FILE* fp3;
@@ -84,7 +84,7 @@ void CHECK_PROP_ADM()
 	fclose(fp3);
 	debug("prop.adm check!", getpid());
 }
-void Output_ite_ADM() 
+void Output_ite_ADM()
 {
 	//建立hXXX.adm，完全比照prop.adm
 	sprintf(filename, "h%d.adm", ite);
@@ -116,70 +116,15 @@ void Load_PROP_GEO(struct PROP* prop)
 		{
 			fscanf(fp, "%lf", &prop->NPARAMETER[j][i]);
 		}
-					
+
 	}
-		
+
 	fclose(fp);
 	debug("*.geo load!", getpid());
 }
 
-void Output_PROP_GEO(struct PROP* prop, struct BFKIN* bfkin)
-{
-	sprintf(geoname, "h%d.geo", ite);
-	fp = fopen(geoname, "w");
-	fprintf(fp, "prop\n");
-	fprintf(fp, "%d %d %d %d %d \n", prop->NX, prop->NBLADE, prop->NC, prop->MR, prop->NTMP);
-	fprintf(fp, "%.4lf %d %d %.4lf %.4lf %.4lf\n", prop->RHUB, prop->NHBU, prop->MHBT, prop->XHBU, prop->XHBD, prop->XHBT);
-	fprintf(fp, "%.4lf %.4lf %.4lf %.4lf %.4lf %.4lf %.4lf\n", prop->ADVCO, prop->RULT, prop->RHULT, prop->DCD, prop->XULT, prop->DTPROP, prop->XUWDK);
-	for (j = 0; j != 7; ++j)
-	{
-		for (i = 0; i != prop->NX; ++i)fprintf(fp, "%8.5lf ", prop->NPARAMETER[j][i]);
-		fprintf(fp, "\n");
-	}
 
-	//入流與船速比為圓盤入流/Vs-誘導速度/Vs
-	for (i = 0; i != prop->NX; ++i)fprintf(fp, "%.5lf ", Vx_total[i] / bfkin->Vs - Ux_bem[i]);
-	fprintf(fp, "\n");
-	for (i = 0; i != prop->NX; ++i)fprintf(fp, "%.5lf ", Vr_total[i] / bfkin->Vs - Ur_bem[i]);
-	fprintf(fp, "\n");
-	for (i = 0; i != prop->NX; ++i)fprintf(fp, "%.5lf ", Vt_total[i] / bfkin->Vs - Ut_bem[i]);
-	fprintf(fp, "\n");
 
-	//hXXX.geo最後4行設為0
-	for (j = 0; j != 4; ++j)
-	{
-		for (i = 0; i != prop->NX; ++i) { fprintf(fp, "0.00000 "); }
-		fprintf(fp, "\n");
-	}
-	fclose(fp);
-	debug("*.geo Output!", getpid());
-}
-
-void MESH_STEP_1()
-{
-	/*
-	 *STEP[1]
-	 *使用getpid輸出各process獨自處理的網格資料(thread_pid_ite.txt)
-	 *假設有5個process在分工處理，thread資料夾便會輸出5個(thread_pid_ite.txt)對應5個不同的pid
-	 *(thread_pid_ite.txt)=[網格編號,網格中心點X,網格中心點y,網格中心點z,網格中心點速度X,網格中心點速度y,網格中心點速度z]
-	 *此時minCellid在各別的process裡記錄最小的網格編號 (minCellid不是矩陣只是單變數，但在各個process裡代表該process的minCellid)
-	 */
-	FILE* fp;
-	sprintf(str, ".\\thread\\%d_%d.txt", getpid(), ite);
-	fp = fopen(str, "w");
-	debug("STEP[1]-1   open thread file", getpid());
-	fprintf(fp, "%d\n", tmp_size);
-	for (i = 0; i < tmp_size; i++)
-	{
-		fprintf(fp, "%lf %lf %lf %lf %lf %lf %lf\n", tmp_Cell_id[i][0], tmp_centroid[i][0], tmp_centroid[i][1], tmp_centroid[i][2], tmp_Velocity[i][0], tmp_Velocity[i][1], tmp_Velocity[i][2]);
-		if (minCellid > (int)tmp_Cell_id[i][0])
-		{
-			minCellid = (int)tmp_Cell_id[i][0];
-		}
-	}
-	fclose(fp);
-	debug("STEP[1]-2   output minCellid", getpid());
-}
 
 void MESH_STEP_2()
 {
@@ -204,7 +149,7 @@ void MESH_STEP_3()
 	np = 0;
 	np = count_file_num_in_a_folder(".\\thread");
 	debug("STEP[3]     np calculation Done!", getpid());
-	
+
 }
 void MESH_STEP_4()
 {
@@ -215,7 +160,7 @@ void MESH_STEP_4()
 	 *threadboy=1表示已在最小process裡建置矩陣成功並以最小核心開啟各檔案紀錄在矩陣裡
 	 */
 	j = 0;
-	FILE* fp,*fp1;
+	FILE* fp, * fp1;
 	for (i = 0; i < 99999999999; i++)
 	{
 		sprintf(str, ".\\thread\\%d_%d.txt", i, ite);
@@ -251,6 +196,7 @@ void MESH_STEP_4()
 			}
 		}
 	}
+	
 	debug("STEP[4]     Frist thread load done!", getpid());
 }
 void MESH_STEP_5(struct BFKIN* bfkin)
@@ -272,7 +218,7 @@ void MESH_STEP_6()
 	* STEP[6]
 	* 決定最小網格id並輸出,輸出後刪除
 	*/
-	FILE* fp,* fp1;
+	FILE* fp, * fp1;
 	for (i = 0; i < np; i++)
 	{
 		sprintf(str, ".\\mesh\\%d_%d.txt", threadnumber[i], ite);
@@ -354,7 +300,7 @@ void MESH_STEP_8(struct BFKIN* bfkin)
 		{
 			mesh[i][7] = (double)-acos(mesh[i][2] / mesh[i][6]); //徑度
 		}
-		else 
+		else
 		{
 			mesh[i][7] = (double)acos(mesh[i][2] / mesh[i][6]); //徑度
 		}

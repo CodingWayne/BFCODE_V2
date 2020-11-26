@@ -1,7 +1,12 @@
 #ifndef UCLIB_H
 #define UCLIB_H
+#ifdef DOUBLE_PRECISION
+typedef double Real;
+#else
 typedef float Real;
+#endif
 typedef double CoordReal;
+
 #ifdef __cplusplus
 extern "C" {
 #endif

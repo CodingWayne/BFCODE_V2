@@ -60,35 +60,36 @@ char geoname[50];
 struct PROP
 {
 	//NX:number of radii for the input geometry parameters for patpans11; NBLADE:number fo blades;  MR:number of spanwise panels in patpans11
-	int NX,NBLADE,NC,MR,NTMP,NHBU,MHBT;
-	double RHUB,XHBU,XHBD,XHBT,ADVCO,RULT,RHULT,DCD,XULT,DTPROP,XUWDK;//ADVCO:advance coefficient(Js=Vs/n/D)，用以儲存.geo之J值，或前一輪hXXX.geo之J值，用於牛頓法找J值
+	int NX, NBLADE, NC, MR, NTMP, NHBU, MHBT;
+	double RHUB, XHBU, XHBD, XHBT, ADVCO, RULT, RHULT, DCD, XULT, DTPROP, XUWDK;//ADVCO:advance coefficient(Js=Vs/n/D)，用以儲存.geo之J值，或前一輪hXXX.geo之J值，用於牛頓法找J值
 	double** NPARAMETER;//NPARAMETER[][]:用以儲存prop.geo第四行之後的數值;
 };
 void Load_PROP_GEO(struct PROP* prop);
-void Output_PROP_GEO(struct PROP* prop, struct BFKIN* bfkin);
+
 
 //--------------------------------------------------------------------------------
-double reitestar, pitch;
-FILE* fp5, * fp3, * fp, * fp1,*fp2;
-int ite;
-char str[50],label[100],cmd[50],filename[50];
+double  pitch;
+FILE* fp5, * fp3, * fp, * fp1, * fp2;
+int ite, reitestar;
+char str[50], label[100], cmd[50], filename[50];
 int i, j;
 double PI;
-double r,theta;//r:用以儲存網格所在的半徑大小 theta:用以儲存網格所在的徑度大小 R:圓盤半徑 x:圓盤厚度 xp;在x軸上的位置
+double r, theta;//r:用以儲存網格所在的半徑大小 theta:用以儲存網格所在的徑度大小 R:圓盤半徑 x:圓盤厚度 xp;在x軸上的位置
 double HULLDRAG, THRUST, THRUST0, KT, KT0, ADVCO0, Error, W, Err, Err0;
-/*HULLDRAG:用於儲存hulldrag.csv裡的最後一項(也就是每一輪之前一步的drag) 
-* THRUST:用以儲存有效推力,或前一輪之有效推力 
+/*HULLDRAG:用於儲存hulldrag.csv裡的最後一項(也就是每一輪之前一步的drag)
+* THRUST:用以儲存有效推力,或前一輪之有效推力
 * THRUST0:用以儲存前二輪之有效推力
-* KT:用以儲存hXXX.oup裡的CD=0.0035之KT值，或前一輪之hXXX.oup裡的CD=0.0035之KT值，用於計算THRUST; 
-* KT0:用以儲存前二輪之hXXX.oup裡的CD=0.0035之KT值，用於計算THRUST0; 
+* KT:用以儲存hXXX.oup裡的CD=0.0035之KT值，或前一輪之hXXX.oup裡的CD=0.0035之KT值，用於計算THRUST;
+* KT0:用以儲存前二輪之hXXX.oup裡的CD=0.0035之KT值，用於計算THRUST0;
 * ADVCO0:儲存前二輪hXXX.geo之J值，用於牛頓法找J值;
 * Error:有效阻力與有效推力的差值;
-* W:用以儲存W.dat裡的數值(hXXX.oup裡的1-w); 
-* Err:用以儲存前一輪之Error; 
+* W:用以儲存W.dat裡的數值(hXXX.oup裡的1-w);
+* Err:用以儲存前一輪之Error;
 * Err0:用以儲存前二輪之Error;
 */
 double Ktoj, ja;
-
+//Cx, Cr, Ct:用以儲存體積力在徑向分佈化為的6個係數(C0~C5); Tn:用以儲存體積力在徑向分佈化為的6個係數的單變數函數(T0~T6); sum:用於儲存體積力公式裡之CnTn總和;origin 儲存體積力
+double  Cx[6], Cr[6], Ct[6], Tn[6], sum, originfx, originfr, originft;
 /*-------------------------網格變數------------------------------------------------------
  *meshload為判斷變數，抓完網格後=1
  *minCellid為最小網格編號
@@ -98,12 +99,12 @@ double Ktoj, ja;
  *numb,non僅為記錄用
  * tmp_size為暫存size的變數
  */
-int  meshload,minCellid,np, threadboy, * newsize, * threadnumber, all_size ,tmp_size;
+int  meshload, minCellid, np, threadboy, * newsize, * threadnumber, all_size;
 double** mesh;
 int numb, kk;
 double non;
-double **tmp_Cell_id,**tmp_centroid,**tmp_Velocity;
-void MESH_STEP_1();
+
+
 void MESH_STEP_2();
 void MESH_STEP_3();
 void MESH_STEP_4();
@@ -114,10 +115,10 @@ void MESH_STEP_8(struct BFKIN* bfkin);
 void MESH_STEP_9(struct BFKIN* bfkin);
 //-------------------------------------------------------------------------------------
 void Load_bfkin(struct BFKIN* bfkin);
-void Output_bfkin(struct BFKIN* bfkin, double* reitestar, double* pitch);
+void Output_bfkin(struct BFKIN* bfkin, int* reitestar, double* pitch);
 //-------------------------------------------------------------------------------------
-double *Vx_ave,*Vt_ave,*Vr_ave,*Vx_sum,*Vt_sum,*Vr_sum,*r_ave,*r_sum,*n;
-double *fx,*fr,*ft,*bfx,*bfr,*bft,*r_F,*r_x,*r_U,*Vx_total,*Vt_total,*Vr_total,*Ux,*Ut,*Ur,*Ux_bem,*Ut_bem,*Ur_bem;
+double* Vx_ave, * Vt_ave, * Vr_ave, * Vx_sum, * Vt_sum, * Vr_sum, * r_ave, * r_sum, * n;
+double* fx, * fr, * ft, * bfx, * bfr, * bft, * r_F, * r_x, * r_U, * Vx_total, * Vt_total, * Vr_total, * Ux, * Ut, * Ur, * Ux_bem, * Ut_bem, * Ur_bem;
 //r_x[]:用以儲存葉片垂向分段(MR個段)裡，包含頭尾之每點的r/R，數量為MR+1個，(垂向分段為sine spanwise) 
 //r_F[]:用以儲存patpans11.exe計算之力的徑向位置，數量為MR個，(垂向分段為sine spanwise) 
 //fx[],fr[],ft[]:patpans11.exe計算之力?

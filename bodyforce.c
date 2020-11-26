@@ -25,58 +25,16 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 		struct BFKIN bfkin;
 		struct PROP prop;
 
-		reitestar = bfkin.itestar % bfkin.ci;
+		
 		pitch = 1;
 		bfkin.R = 1;
 		//Output_bfkin(&bfkin, &reitestar, &pitch);
 		PI = (double)acos(-1.0);
+
 		ite = Iteration[0][0];
 		pitch = (double)Angle[0][0]; //angle[0] 當下的pitch徑度
-		int initmesh = 0;
-		if (initmesh == 0)
-		{
-			tmp_size = size;
-			tmp_Cell_id = (double*)malloc(tmp_size * sizeof(double*));
-			for (i = 0; i < tmp_size; i++)
-			{
-				tmp_Cell_id[i] = (double*)malloc(1 * sizeof(double));
-			}
-			for (i = 0; i < tmp_size; i++)
-			{
-				tmp_Cell_id[i][0] = Cell_id[i][0];
-			}
-			tmp_centroid = (double*)malloc(tmp_size * sizeof(double*));
-			for (i = 0; i < tmp_size; i++)
-			{
-				tmp_centroid[i] = (double*)malloc(3 * sizeof(double));
-			}
-			for (i = 0; i < tmp_size; i++)
-			{
-				for (j = 0; j < 3; j++)
-				{
-					tmp_centroid[i][j] = centroid[i][j];
-				}
-			}
-			tmp_Velocity = (double*)malloc(tmp_size * sizeof(double*));
-			for (i = 0; i < tmp_size; i++)
-			{
-				tmp_Velocity[i] = (double*)malloc(3 * sizeof(double));
-			}
-			for (i = 0; i < tmp_size; i++)
-			{
-				for (j = 0; j < 3; j++)
-				{
-					tmp_Velocity[i][j] = Velocity[i][j];
-				}
-			}
-			initmesh = 1;
-		}
-		Load_bfkin(&bfkin);
-		sprintf(str, ".\\debug\\debug%d.txt", getpid());
-		fp = fopen(str, "w");
-		fprintf(fp, "=================  Iteration=%d  =================\n", ite);
-		fclose(fp);
-		if (ite == 0) 
+		
+		if (ite == 0)
 		{
 			system("mkdir debug");
 			system("mkdir thread");
@@ -84,20 +42,222 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 			system("mkdir propeller");
 			system("mkdir wake");
 		}
+		Load_bfkin(&bfkin);
+		reitestar = bfkin.itestar % bfkin.ci;
+		Output_bfkin(&bfkin, &reitestar, &pitch);
+
+		sprintf(str, ".\\debug\\debug%d.txt", getpid());
+		fp = fopen(str, "w");
+		fprintf(fp, "=================  Iteration=%d  =================\n", ite);
+		fclose(fp);
+		
 
 		//=======================================================================網格參數初始化======================
 		meshload = 0; minCellid = 999999999, np = 0, threadboy = 0, * newsize, * threadnumber, all_size = 0, non = 0;
 		//==========================================================================================================
 
+		/*==========================================================================================================
+		*                                                     放入受力
+		* ==========================================================================================================
+		*/
+		if (ite > bfkin.itestar && bfkin.Unsteady_offon == 0 || ite > bfkin.itestar && bfkin.Unsteady_offon == 1 && ite <= bfkin.unsteady_c || ite > bfkin.itestar && bfkin.Unsteady_offon == 1 && ite > bfkin.unsteady_c + (bfkin.tnb * bfkin.ci) || ite >= bfkin.itestar && bfkin.P_3 == 1)
+		{
+			debug("Steady Body Force Star!", getpid());
+			mesh = (double**)malloc((bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb) * sizeof(double*));
+			for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i)
+			{
+				mesh[i] = (double*)malloc(8 * sizeof(double));
+			}
+
+			sprintf(str, ".\\mesh\\mesh.txt");
+			fp = fopen(str, "r");
+
+			for (i = 0; i < (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); i++)
+			{
+				fscanf(fp, "%lf %lf %lf %lf %lf %lf %lf %lf", &mesh[i][0], &mesh[i][1], &mesh[i][2], &non, &non, &non, &mesh[i][6], &mesh[i][7]);
+
+			}
+			fclose(fp);
+
+			sprintf(geoname, "prop.geo");
+			fp = fopen(geoname, "r");
+			fgets(label, 100, fp);
+			fscanf(fp, "%d%d%d%d%d", &prop.NX, &prop.NBLADE, &prop.NC, &prop.MR, &prop.NTMP);
+			fscanf(fp, "%lf%d%d%lf%lf%lf", &prop.RHUB, &prop.NHBU, &prop.MHBT, &prop.XHBU, &prop.XHBD, &prop.XHBT);
+			fscanf(fp, "%lf%lf%lf%lf%lf%lf%lf", &prop.ADVCO, &prop.RULT, &prop.RHULT, &prop.DCD, &prop.XULT, &prop.DTPROP, &prop.XUWDK);
+			prop.NPARAMETER = (double**)malloc(14 * sizeof(double*)); //用以儲存prop.geo第四行之後的數值 
+			for (i = 0; i != 14; i++)prop.NPARAMETER[i] = (double*)malloc(prop.NX * sizeof(double));
+			for (j = 0; j != 14; ++j)for (i = 0; i != prop.NX; ++i)fscanf(fp, "%lf", &prop.NPARAMETER[j][i]);
+			fclose(fp);
+
+
+			//r_x:用以儲存葉片垂向分段(MR個段)裡，包含頭尾之每點的r/R (垂向分段為sine spanwise) 
+			r_x = (double*)malloc((prop.MR + 1) * sizeof(double));
+
+			for (i = 0; i != prop.MR + 1; ++i) 
+			{
+				r_x[i] = prop.RHUB + (1 - prop.RHUB) * (double)sin(0.5 * PI / prop.MR * i);
+			}
+
+			/*===================================================================================================================
+			*													放入受力
+			* ===================================================================================================================
+			*/
+			//體積力的徑向分佈化為6個係數(C0~C5)的單變數函數(T0~T5)公式，變數為徑向位置r
+			//讀取Cn值(C0~C5)，數值已由chebyToCn.exe算出
+			fp = fopen("fxCn.dat", "r");
+			for (i = 0; i != 6; ++i)fscanf(fp, "%lf", &Cx[i]);
+			fclose(fp);
+			fp = fopen("frCn.dat", "r");
+			for (i = 0; i != 6; ++i)fscanf(fp, "%lf", &Cr[i]);
+			fclose(fp);
+			fp = fopen("ftCn.dat", "r");
+			for (i = 0; i != 6; ++i)fscanf(fp, "%lf", &Ct[i]);
+			fclose(fp);
+
+			debug("Cn load!", getpid());
+
+			for (i = 0; i != size; ++i) 
+			{
+				kk = (int)Cell_id[i][0] - 1;
+
+				//計算網格所在的半徑大小
+				r = mesh[kk][6];
+
+				//利用網格所在的y值，計算theta徑度
+				theta = mesh[kk][7];
+
+
+				//計算單變數函數(T0~T5)，變數為徑向位置r
+				Tn[0] = 1; //T0(r) = 1
+				Tn[1] = (r - (r_x[0] + r_x[1]) / 2.0 * bfkin.R) / ((r_x[prop.MR - 1] + r_x[prop.MR]) / 2.0 * bfkin.R - (r_x[0] + r_x[1]) / 2.0 * bfkin.R) * 2 - 1; //T1(r) = r = (r-(r_x[0]+r_x[1])/2.0*R)/((r_x[MR-1]+r_x[MR])/2.0*R-(r_x[0]+r_x[1])/2.0*R)*2-1
+				for (j = 2; j < 6; j++) { Tn[j] = 2 * ((r - (r_x[0] + r_x[1]) / 2.0 * bfkin.R) / ((r_x[prop.MR - 1] + r_x[prop.MR]) / 2.0 * bfkin.R - (r_x[0] + r_x[1]) / 2.0 * bfkin.R) * 2 - 1) * Tn[j - 1] - Tn[j - 2]; } //Tn+1(r) = 2*x*Tn(r) - Tn-1(r) 
+				//fprintf(fp1,"%d %f %f %f %f %f %f\n",i,Tn[0],Tn[1],Tn[2],Tn[3],Tn[4],Tn[5]);
+
+				//計算x方向螺槳受力(體積力) - 從input往output方向
+				sum = 0;
+				for (j = 0; j < 6; j++)sum = sum + Tn[j] * Cx[j];
+				originfx = sum - 0.5 * Cx[0];
+
+				//計算r方向螺槳受力(體積力) - 向外為正
+				sum = 0;
+				for (j = 0; j < 6; j++)sum = sum + Tn[j] * Cr[j];
+				originfr = sum - 0.5 * Cr[0];
+
+				//計算t方向螺槳受力(體積力) - 以面向入流面方面，從正Z軸逆時針為正，此時正Y朝右
+				sum = 0;
+				for (j = 0; j < 6; j++)sum = sum + Tn[j] * Ct[j];
+				originft = -(sum - 0.5 * Ct[0]);
+
+				//fprintf(fp2,"%d %f %f %f\n",i,originfx,originfr,originft);
+
+
+				//計算單位體積力
+				result[i][0] = (originfx * prop.NBLADE / 2.0 / PI / r / bfkin.x) * cos(pitch) + ((originfr * cos(theta) - originft * sin(theta)) * prop.NBLADE / 2.0 / PI / r / bfkin.x) * sin(pitch); //計算x方向單位體積力 ,NBLADE:葉片數
+				result[i][1] = (-originfr * sin(theta) - originft * cos(theta)) * prop.NBLADE / 2.0 / PI / r / bfkin.x;														 //計算y方向單位體積力 ,NBLADE:葉片數	
+
+
+				if (bfkin.bow_dir == 1)
+				{
+					result[i][0] = result[i][0] * -1;
+					result[i][1] = result[i][1] * -1;
+				}
+
+				result[i][2] = -(originfx * prop.NBLADE / 2.0 / PI / r / bfkin.x) * sin(pitch) + ((originfr * cos(theta) - originft * sin(theta)) * prop.NBLADE / 2.0 / PI / r / bfkin.x) * cos(pitch);//計算z方向單位體積力 ,NBLADE:葉片數
+
+			}
+
+
+			debug("result Steady Force input!", getpid());
+			free(r_x);
+
+			if (ite % bfkin.ci != reitestar)
+			{
+				free(prop.NPARAMETER);
+				if (ite == 0) 
+				{
+					if (threadboy == 1)
+					{
+						free(newsize); free(threadnumber);
+
+						for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i) 
+						{
+							free(mesh[i]);
+						}
+						free(mesh);
+					}
+				}
+
+				if (meshload == 0) 
+				{
+					if (threadboy == 0) 
+					{
+						for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i)
+						{
+							free(mesh[i]);
+						}
+						free(mesh);
+					}
+				}
+
+
+
+
+				threadboy = 1;
+				if (ite >= bfkin.itestar && ite % bfkin.ci == reitestar && meshload == 0) 
+				{
+					if (threadboy == 1) 
+					{
+						free(newsize); free(threadnumber);
+
+						for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i) 
+						{
+							free(mesh[i]);
+						}
+						free(mesh);
+					}
+				}
+
+			}
+
+			threadboy = 0;
+			debug("[][] Clear!", getpid());
+		}
+		/*==========================================================================================================
+		*                                                     一般情況
+		* ==========================================================================================================
+		*/
 		if (ite == 0 || ite >= bfkin.itestar && ite % bfkin.ci == reitestar && Iteration[0] != 0)
 		{
-			Output_bfkin(&bfkin, &reitestar, &pitch);
+			
 			threadboy = 0;
+			Output_bfkin(&bfkin, &reitestar, &pitch);
 			//=======================================================================抓取螺盤網格========================
 			if (ite == 0)
 			{
 				meshload = 1;//meshload=1 表示已抓取網格
-				MESH_STEP_1();
+				/*
+				 *STEP[1]
+				 *使用getpid輸出各process獨自處理的網格資料(thread_pid_ite.txt)
+				 *假設有5個process在分工處理，thread資料夾便會輸出5個(thread_pid_ite.txt)對應5個不同的pid
+				 *(thread_pid_ite.txt)=[網格編號,網格中心點X,網格中心點y,網格中心點z,網格中心點速度X,網格中心點速度y,網格中心點速度z]
+				 *此時minCellid在各別的process裡記錄最小的網格編號 (minCellid不是矩陣只是單變數，但在各個process裡代表該process的minCellid)
+				 */				
+				sprintf(str, ".\\thread\\%d_%d.txt", getpid(), ite);
+				fp = fopen(str, "w");
+				debug("STEP[1]-1   open thread file", getpid());
+				fprintf(fp, "%d\n", size);
+				for (i = 0; i < size; i++)
+				{
+					fprintf(fp, "%lf %lf %lf %lf %lf %lf %lf\n", Cell_id[i][0], centroid[i][0], centroid[i][1], centroid[i][2], Velocity[i][0], Velocity[i][1], Velocity[i][2]);
+					if (minCellid > (int)Cell_id[i][0])
+					{
+						minCellid = (int)Cell_id[i][0];
+					}
+				}
+				fclose(fp);
+				debug("STEP[1]-2   output minCellid", getpid());
+
 				MESH_STEP_2();
 				MESH_STEP_3();
 				MESH_STEP_4();
@@ -119,7 +279,17 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 				*/
 				if (ite >= bfkin.itestar && ite % bfkin.ci == reitestar && meshload == 0)
 				{
-					MESH_STEP_1();
+					//output thread number & point site
+					//依各核心序輸出包含核心之size,centroid[][],Velocity[][]文件
+					sprintf(str, ".\\thread\\%d_%d.txt", getpid(), ite); //輸出各核心之size,centroid[][],Velocity[][]
+					fp = fopen(str, "w");
+					fprintf(fp, "%d\n", size);
+					for (i = 0; i < size; i++) 
+					{
+						fprintf(fp, "%lf %lf %lf %lf %lf %lf %lf\n", Cell_id[i][0], centroid[i][0], centroid[i][1], centroid[i][2], Velocity[i][0], Velocity[i][1], Velocity[i][2]);
+					}
+					fclose(fp);
+
 					MESH_STEP_3();
 					MESH_STEP_4();
 					if (threadboy == 1)
@@ -343,7 +513,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 					sprintf(cmd, "SPLINE.exe");
 					outexe(cmd);
-					Sleep(100);
+					Sleep(1000);
 					fp = fopen("spline.dat", "r");
 					for (i = 0; i != prop.NX; ++i)
 					{
@@ -365,7 +535,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 					sprintf(cmd, "SPLINE.exe");
 					outexe(cmd);
-					Sleep(100);
+					Sleep(1000);
 					fp = fopen("spline.dat", "r");
 					for (i = 0; i != prop.NX; ++i)
 					{
@@ -386,7 +556,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 					sprintf(cmd, "SPLINE.exe");
 					outexe(cmd);
-					Sleep(100);
+					Sleep(1000);
 					fp = fopen("spline.dat", "r");
 					for (i = 0; i != prop.NX; ++i)
 					{
@@ -420,10 +590,10 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						fprintf(fp, filename);
 						fprintf(fp, "\n0");
 						fclose(fp);
-						Sleep(100);
+						Sleep(1000);
 						sprintf(cmd, "cmd.exe /c sfpv11.exe<sfpv11.kin");
 						outexe(cmd);
-						Sleep(100);
+						Sleep(1000);
 						fp = fopen("indvel0.dat", "r");
 						fgets(str, 50, fp);
 						fgets(str, 50, fp);
@@ -444,7 +614,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 						sprintf(cmd, "SPLINE.exe");
 						outexe(cmd);
-						Sleep(100);
+						Sleep(1500);
 						fp = fopen("spline.dat", "r");
 						for (i = 0; i != prop.NX; ++i)fscanf(fp, "%lf%lf", &non, &Ux_bem[i]);
 						fclose(fp);
@@ -460,7 +630,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 						sprintf(cmd, "SPLINE.exe");
 						outexe(cmd);
-						Sleep(100);
+						Sleep(1500);
 						fp = fopen("spline.dat", "r");
 						for (i = 0; i != prop.NX; ++i)fscanf(fp, "%lf%lf", &non, &Ut_bem[i]);
 						fclose(fp);
@@ -476,7 +646,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 						sprintf(cmd, "SPLINE.exe");
 						outexe(cmd);
-						Sleep(100);
+						Sleep(3000);
 						fp = fopen("spline.dat", "r");
 						for (i = 0; i != prop.NX; ++i)fscanf(fp, "%lf%lf", &non, &Ur_bem[i]);
 						fclose(fp);
@@ -507,11 +677,34 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						* ========================================================================================================
 						*/
 						//建立hXXX.geo，ADVCO採用prop.geo原值，並除入流與船速比外，完全比照prop.geo
-						Output_PROP_GEO(&prop, &bfkin);
+						sprintf(filename, "h%d.geo", ite);
+						fp = fopen(filename, "w");
+						fprintf(fp, label);
+						fprintf(fp, "%d %d %d %d %d\n", prop.NX, prop.NBLADE, prop.NC, prop.MR, prop.NTMP);
+						fprintf(fp, "%.4lf %d %d %.4lf %.4lf %.4lf\n", prop.RHUB, prop.NHBU, prop.MHBT, prop.XHBU, prop.XHBD, prop.XHBT);
+						fprintf(fp, "%.4lf %.4lf %.4lf %.4lf %.4lf %.4lf %.4lf\n", prop.ADVCO, prop.RULT, prop.RHULT, prop.DCD, prop.XULT, prop.DTPROP, prop.XUWDK);
+						for (j = 0; j != 7; ++j) {
+							for (i = 0; i != prop.NX; ++i)fprintf(fp, "%8.5lf ", prop.NPARAMETER[j][i]);
+							fprintf(fp, "\n");
+						}
+						//入流與船速比為圓盤入流/Vs-誘導速度/Vs
+						for (i = 0; i != prop.NX; ++i)fprintf(fp, "%.5lf ", Vx_total[i] / bfkin.Vs - Ux_bem[i]);
+						fprintf(fp, "\n");
+						for (i = 0; i != prop.NX; ++i)fprintf(fp, "%.5lf ", Vr_total[i] / bfkin.Vs - Ur_bem[i]);
+						fprintf(fp, "\n");
+						for (i = 0; i != prop.NX; ++i)fprintf(fp, "%.5lf ", Vt_total[i] / bfkin.Vs - Ut_bem[i]);
+						fprintf(fp, "\n");
+						//hXXX.geo最後4行設為0
+						for (j = 0; j != 4; ++j) {
+							for (i = 0; i != prop.NX; ++i) { fprintf(fp, "0.00000 "); }
+							fprintf(fp, "\n");
+						}
+						fclose(fp);
 
+						debug("OUT　GEO  Done!", getpid());
 						//建立hXXX.adm，完全比照prop.adm
 						Output_ite_ADM();
-						
+
 						//建立patpans11.kin
 						sprintf(filename, "h%d", ite);
 						fp = fopen("patpans11.kin", "w");
@@ -521,25 +714,30 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						//先執行一次patpans11.exe
 						sprintf(cmd, "cmd.exe /c patpans11.exe<patpans11.kin");
 						outexe(cmd);
-						Sleep(100);
+						Sleep(2000);
 						debug("Patpans1  Done!", getpid());
 
 						/*========================================================================================================
 						* 計算.geo檔所用J值
-						* 第一輪及第二輪以二分法計算[Kt/j^2(常數)]與[螺槳K-Jchart]交點之J值，第三輪後以前兩次J、KT值利用牛頓法計算J值						
+						* 第一輪及第二輪以二分法計算[Kt/j^2(常數)]與[螺槳K-Jchart]交點之J值，第三輪後以前兩次J、KT值利用牛頓法計算J值
 						* ========================================================================================================
 						*/
-						
+						sprintf(filename, "XYZ_Internal_Table_table_%d.csv", ite);
+						fp2 = fopen(filename, "r");
+						fgets(str, 80, fp2);
+						fscanf(fp2, "%lf,%lf,%lf,%lf", &HULLDRAG, &non, &non, &non);
+						fclose(fp2);
+						debug("No fixed J HULLDRAG load!", getpid());
 
 						if ((ite - (bfkin.itestar - bfkin.ci)) / bfkin.ci == 1)//第一輪
 						{
 							debug("Round1", getpid());
-							if (bfkin.firstJ_offon == 1) 
+							if (bfkin.firstJ_offon == 1)
 							{
 								prop.ADVCO = bfkin.firstJ;
 								debug("First J Done", getpid());
 							}
-							else 
+							else
 							{
 								//提取先執行一次patpans11所得之hXXX.oup裡的1-w值
 								sprintf(filename, "Kt-File.txt");
@@ -549,13 +747,13 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 								sprintf(cmd, "GetKt.exe");
 								outexe(cmd);
-								Sleep(100);
+								Sleep(1500);
 								fp = fopen("W.dat", "r");
 								fscanf(fp, "%lf", &W);
 								fclose(fp);
 
 								//計算Ktoj
-								Ktoj = (HULLDRAG  + bfkin.wr + bfkin.ar - bfkin.sfc) / (bfkin.rho * pow(bfkin.Vs, 2) * pow(2 * bfkin.R, 2) * pow(W, 2));
+								Ktoj = (HULLDRAG + bfkin.wr + bfkin.ar - bfkin.sfc) / (bfkin.rho * pow(bfkin.Vs, 2) * pow(2 * bfkin.R, 2) * pow(W, 2));
 
 								//利用Ktoj，執行KTo.exe，計算ja
 								sprintf(filename, "Ktoj.dat");
@@ -565,7 +763,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 								sprintf(cmd, "KTo.exe");
 								outexe(cmd);
-								Sleep(100);
+								Sleep(3000);
 								fp = fopen("ja.dat", "r");
 								fscanf(fp, "%lf", &ja);
 								fclose(fp);
@@ -596,7 +794,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 							sprintf(cmd, "GetKt.exe");
 							outexe(cmd);
-							Sleep(100);
+							Sleep(1500);
 							fp = fopen("KT.dat", "r");
 							fscanf(fp, "%lf", &KT);
 							fclose(fp);
@@ -622,7 +820,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 							sprintf(cmd, "GetKt.exe");
 							outexe(cmd);
-							Sleep(100);
+							Sleep(1500);
 							fp = fopen("W.dat", "r");
 							fscanf(fp, "%lf", &W);
 							fclose(fp);
@@ -638,7 +836,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 							sprintf(cmd, "KTo.exe");
 							outexe(cmd);
-							Sleep(100);
+							Sleep(3000);
 							fp = fopen("ja.dat", "r");
 							fscanf(fp, "%lf", &ja);
 							fclose(fp);
@@ -677,7 +875,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 							sprintf(cmd, "GetKt.exe");
 							outexe(cmd);
-							Sleep(100);
+							Sleep(1500);
 							fp = fopen("KT.dat", "r");
 							fscanf(fp, "%lf", &KT);
 							fclose(fp);
@@ -704,14 +902,14 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 							sprintf(cmd, "GetKt.exe");
 							outexe(cmd);
-							Sleep(100);
+							Sleep(1500);
 							fp = fopen("KT.dat", "r");
 							fscanf(fp, "%lf", &KT0);
 							fclose(fp);
 							debug("*.KT0 output!", getpid());
 
 							//計算前二輪THRUST
-							THRUST0 = KT0 * bfkin.rho * pow(bfkin.Vs, 2) * pow(2 * bfkin.R, 2) /pow(ADVCO0, 2);
+							THRUST0 = KT0 * bfkin.rho * pow(bfkin.Vs, 2) * pow(2 * bfkin.R, 2) / pow(ADVCO0, 2);
 
 							//提取前二輪之Error
 							sprintf(filename, "Error%d.dat", ite - 2 * bfkin.ci);
@@ -724,7 +922,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 							if (THRUST == THRUST0) {
 								prop.ADVCO = ADVCO0;
 							}
-							else 
+							else
 							{
 								prop.ADVCO = ((HULLDRAG + bfkin.wr + bfkin.ar - bfkin.sfc) - THRUST) / (Err0 - Err) * (prop.ADVCO - ADVCO0) + prop.ADVCO;
 							}
@@ -734,7 +932,29 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 					}
 					//建立hXXX.geo，ADVCO採用--適才之計算值--，並除入流與船速比外，完全比照prop.geo
-					Output_PROP_GEO(&prop, &bfkin);
+					sprintf(filename, "h%d.geo", ite);
+					fp = fopen(filename, "w");
+					fprintf(fp, label);
+					fprintf(fp, "%d %d %d %d %d\n", prop.NX, prop.NBLADE, prop.NC, prop.MR, prop.NTMP);
+					fprintf(fp, "%.4lf %d %d %.4lf %.4lf %.4lf\n", prop.RHUB, prop.NHBU, prop.MHBT, prop.XHBU, prop.XHBD, prop.XHBT);
+					fprintf(fp, "%.4lf %.4lf %.4lf %.4lf %.4lf %.4lf %.4lf\n", prop.ADVCO, prop.RULT, prop.RHULT, prop.DCD, prop.XULT, prop.DTPROP, prop.XUWDK);
+					for (j = 0; j != 7; ++j) {
+						for (i = 0; i != prop.NX; ++i)fprintf(fp, "%8.5lf ", prop.NPARAMETER[j][i]);
+						fprintf(fp, "\n");
+					}
+					//入流與船速比為圓盤入流/Vs-誘導速度/Vs
+					for (i = 0; i != prop.NX; ++i)fprintf(fp, "%.5lf ", Vx_total[i] / bfkin.Vs - Ux_bem[i]);
+					fprintf(fp, "\n");
+					for (i = 0; i != prop.NX; ++i)fprintf(fp, "%.5lf ", Vr_total[i] / bfkin.Vs - Ur_bem[i]);
+					fprintf(fp, "\n");
+					for (i = 0; i != prop.NX; ++i)fprintf(fp, "%.5lf ", Vt_total[i] / bfkin.Vs - Ut_bem[i]);
+					fprintf(fp, "\n");
+					//hXXX.geo最後4行設為0
+					for (j = 0; j != 4; ++j) {
+						for (i = 0; i != prop.NX; ++i) { fprintf(fp, "0.00000 "); }
+						fprintf(fp, "\n");
+					}
+					fclose(fp);
 
 					//建立hXXX.adm，完全比照prop.adm
 					Output_ite_ADM();
@@ -751,7 +971,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 					fclose(fp);
 
 					debug("velocity_XX.txt output!", getpid());
-					Sleep(100);
+					Sleep(1000);
 					/*========================================================================================================
 					*                                   執行第二次patpans11
 					* ========================================================================================================
@@ -763,7 +983,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 					sprintf(cmd, "cmd.exe /c patpans11.exe<patpans11.kin");
 					outexe(cmd);
-					Sleep(100);
+					Sleep(2000);
 					debug("Patpans2 Done!", getpid());
 
 					//===================================提取hXXX.oup裡的CD=0.0035之KT值，用於計算THRUST========================		
@@ -774,7 +994,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 					sprintf(cmd, "GetKt.exe");
 					outexe(cmd);
-					Sleep(100);
+					Sleep(1500);
 					fp = fopen("KT.dat", "r");
 					fscanf(fp, "%lf", &KT);
 					fclose(fp);
@@ -806,8 +1026,8 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 					for (i = 0; i != prop.MR + 4; ++i)fgets(str, 80, fp);
 					for (i = 0; i != prop.MR; ++i)fscanf(fp, "%lf%lf%lf%lf%lf%lf%lf", &r_F[i], &fx[i], &fr[i], &ft[i], &non, &non, &non);//r/R, F_X, F_Y, F_Z, Q_X, Q_Y, Q_Z
 					fclose(fp);
-					
-					for (i = 0; i != prop.MR; ++i) 
+
+					for (i = 0; i != prop.MR; ++i)
 					{
 						bfx[i] = fx[i] / (r_x[i + 1] - r_x[i]) * 0.5 * bfkin.rho * bfkin.Vs * bfkin.Vs * bfkin.R;
 						bfr[i] = fr[i] / (r_x[i + 1] - r_x[i]) * 0.5 * bfkin.rho * bfkin.Vs * bfkin.Vs * bfkin.R;
@@ -832,7 +1052,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 					fclose(fp);
 					sprintf(filename, "fx.dat");
 					fp = fopen(filename, "w");
-					for (i = 0; i != prop.MR; ++i) { fprintf(fp, "%f %f\n", r_F[i] * bfkin.R, bfx[i]); }
+					for (i = 0; i != prop.MR; ++i) { fprintf(fp, "%lf %lf\n", r_F[i] * bfkin.R, bfx[i]); }
 					fclose(fp);
 
 					fp = fopen("chebyToCn.kin", "w");
@@ -843,7 +1063,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 					sprintf(cmd, "chebyToCn.exe");//傅立葉轉換
 					outexe(cmd);
 
-					Sleep(100);
+					Sleep(1000);
 
 					//bfr - 執行chebyToCn.exe取得Cn
 					sprintf(filename, "fr%d.dat", ite);
@@ -862,7 +1082,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 					sprintf(cmd, "chebyToCn.exe");
 					outexe(cmd);
-					Sleep(100);
+					Sleep(1000);
 					//bft - 執行chebyToCn.exe取得Cn
 					sprintf(filename, "ft%d.dat", ite);
 					fp = fopen(filename, "w");
@@ -880,9 +1100,9 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 					sprintf(cmd, "chebyToCn.exe");
 					outexe(cmd);
-					Sleep(100);
+					Sleep(1000);
 					debug("ChebyToCn Done!", getpid());
-					
+
 
 
 
@@ -895,21 +1115,80 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 				}
 
+				Sleep(1000);
+				//使用free()歸還給記憶體				
+				for (i = 0; i != 14; i++) 
+				{
+					free(prop.NPARAMETER[i]);
+				}
+				free(prop.NPARAMETER);
+				free(Vx_ave); free(Vt_ave); free(Vr_ave);
+				free(Vx_sum); free(Vt_sum); free(Vr_sum);
+				free(r_ave); free(r_sum); free(n);
+				free(fx); free(ft); free(fr);
+				free(bfx); free(bft); free(bfr);
+				free(r_F); free(r_x); free(r_U);
+				free(Vx_total); free(Vt_total); free(Vr_total);
+				free(Ux); free(Ut); free(Ur);
+				free(Ux_bem); free(Ut_bem); free(Ur_bem);
+
+				if (meshload == 0) 
+				{
+					if (threadboy == 0) 
+					{
+						for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i)
+						{
+							free(mesh[i]);
+						}
+						free(mesh);
+					}
+				}
+				debug("Free Done!", getpid());
+
+				Sleep(1000);
+
 
 
 			}
-
-			if (ite > bfkin.itestar && bfkin.Unsteady_offon == 0)
-			{
-				debug("00000", getpid());
-			}
-
 
 
 		}
 
 
+		free(bfkin.bfkin_hub);
+		if (ite == 0) {
+			if (threadboy == 1) {
+				free(newsize); free(threadnumber);
+
+				for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i) {
+					free(mesh[i]);
+				}
+				free(mesh);
+
+			}
+		}
+
+
+	
+
+
+		if (ite >= bfkin.itestar && ite % bfkin.ci == reitestar  && meshload == 0) {
+			if (threadboy == 1) 
+			{
+				free(newsize); free(threadnumber);
+				for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i) 
+				{
+					free(mesh[i]);
+				}
+				free(mesh);
+			}
+		}
 		
+
+
+		debug("Free Done!", getpid());
+
+
 
 
 

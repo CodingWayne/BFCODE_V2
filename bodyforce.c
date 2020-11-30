@@ -30,8 +30,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 		bfkin.R = 1;
 		//Output_bfkin(&bfkin, &reitestar, &pitch);
 		PI = (double)acos(-1.0);
-
-		ite = Iteration[0][0];
+		ite = (int)Iteration[0][0];
 		pitch = (double)Angle[0][0]; //angle[0] 當下的pitch徑度
 		
 		if (ite == 0)
@@ -63,6 +62,10 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 		if (ite > bfkin.itestar && bfkin.Unsteady_offon == 0 || ite > bfkin.itestar && bfkin.Unsteady_offon == 1 && ite <= bfkin.unsteady_c || ite > bfkin.itestar && bfkin.Unsteady_offon == 1 && ite > bfkin.unsteady_c + (bfkin.tnb * bfkin.ci) || ite >= bfkin.itestar && bfkin.P_3 == 1)
 		{
 			debug("Steady Body Force Star!", getpid());
+			/*================================================================================================
+			* 建mesh矩陣 抓取mesh.txt裡x,y,z, , ,radian,theta
+			* ================================================================================================
+			*/
 			mesh = (double**)malloc((bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb) * sizeof(double*));
 			for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i)
 			{
@@ -78,7 +81,11 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 			}
 			fclose(fp);
-
+			debug("mesh load!", getpid());
+			/*================================================================================================
+			* 讀入prop.geo
+			* ================================================================================================
+			*/
 			sprintf(geoname, "prop.geo");
 			fp = fopen(geoname, "r");
 			fgets(label, 100, fp);
@@ -90,6 +97,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 			for (j = 0; j != 14; ++j)for (i = 0; i != prop.NX; ++i)fscanf(fp, "%lf", &prop.NPARAMETER[j][i]);
 			fclose(fp);
 
+			debug("prop.geo load!", getpid());
 
 			//r_x:用以儲存葉片垂向分段(MR個段)裡，包含頭尾之每點的r/R (垂向分段為sine spanwise) 
 			r_x = (double*)malloc((prop.MR + 1) * sizeof(double));
@@ -99,10 +107,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 				r_x[i] = prop.RHUB + (1 - prop.RHUB) * (double)sin(0.5 * PI / prop.MR * i);
 			}
 
-			/*===================================================================================================================
-			*													放入受力
-			* ===================================================================================================================
-			*/
+			
 			//體積力的徑向分佈化為6個係數(C0~C5)的單變數函數(T0~T5)公式，變數為徑向位置r
 			//讀取Cn值(C0~C5)，數值已由chebyToCn.exe算出
 			fp = fopen("fxCn.dat", "r");
@@ -117,6 +122,10 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 			debug("Cn load!", getpid());
 
+			/*===================================================================================================================
+			*													每個網格  放入受力
+			* ===================================================================================================================
+			*/
 			for (i = 0; i != size; ++i) 
 			{
 				kk = (int)Cell_id[i][0] - 1;
@@ -169,12 +178,14 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 
 			debug("result Steady Force input!", getpid());
+
 			free(r_x);
 
 			if (ite % bfkin.ci != reitestar)
 			{
-				free(prop.NPARAMETER);
-				if (ite == 0) 
+				free(prop.NPARAMETER);//在此先行步驟中用不到
+
+				if (ite == 0) //此if用不到，第0步不會進"放入受力"，會直接進"一般情況"
 				{
 					if (threadboy == 1)
 					{
@@ -188,10 +199,11 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 					}
 				}
 
-				if (meshload == 0) 
+				if (meshload == 0)
 				{
 					if (threadboy == 0) 
 					{
+						//清除各Process中的矩陣
 						for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i)
 						{
 							free(mesh[i]);
@@ -200,9 +212,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 					}
 				}
 
-
-
-
+				//再清除一次各Process中的矩陣
 				threadboy = 1;
 				if (ite >= bfkin.itestar && ite % bfkin.ci == reitestar && meshload == 0) 
 				{
@@ -219,7 +229,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 				}
 
 			}
-
+			//重要! threadboy要歸0以便後續計算
 			threadboy = 0;
 			debug("[][] Clear!", getpid());
 		}
@@ -290,11 +300,16 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 					}
 					fclose(fp);
 
-					MESH_STEP_3();
-					MESH_STEP_4();
+					Sleep(5000);
+
+					MESH_STEP_3();//算np
+					MESH_STEP_4();//以單核心儲存thread裡的mesh矩陣
+
+					Sleep(5000);
+
 					if (threadboy == 1)
 					{
-						MESH_STEP_5(&bfkin);
+						MESH_STEP_5(&bfkin);//建mesh矩陣
 						//讀取minCellid
 						fp = fopen(".\\mesh\\minCellid.txt", "r");
 						fscanf(fp, "%d", &minCellid);
@@ -307,7 +322,8 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 							fscanf(fp, "%lf %lf %lf %lf %lf %lf %lf %lf", &mesh[i][0], &mesh[i][1], &mesh[i][2], &non, &non, &non, &mesh[i][6], &mesh[i][7]);
 						}
 						fclose(fp);
-						debug("mesh.txt load Done!", getpid());
+						debug("threadboy=1 mesh.txt load Done!", getpid());
+						//從thread資料夾裡抓取新的速度到mesh矩陣裡
 						for (i = 0; i < np; i++)
 						{
 							sprintf(str, ".\\thread\\%d_%d.txt", threadnumber[i], ite);
@@ -316,7 +332,8 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 							debug(str, getpid());
 							fp3 = fopen("IMD.dat", "w+");
 							fgets(str, 200, fp);
-							for (j = 0; j < newsize[i]; j++) {
+							for (j = 0; j < newsize[i]; j++) 
+							{
 								fscanf(fp, "%lf", &non);
 								kk = (int)non - minCellid;
 								fscanf(fp, "%lf", &non);
@@ -339,11 +356,11 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						}
 						sprintf(str, "del .\\thread\\allthread%d.txt", threadnumber[0]);
 						system(str);
-						debug("mesh load done!", getpid());
+						debug("threadboy=1 mesh load done!", getpid());
 					}
 				}
 				//
-				//============================================================其他核心讀取mesh.txt=================================
+				//=======================================其他核心建置mesh矩陣讀取mesh.txt(現只有單核心threadboy=1有mesh矩陣而已)=================================
 				//
 				if (meshload == 0)
 				{
@@ -354,17 +371,17 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						{
 							mesh[i] = (double*)malloc(8 * sizeof(double));
 						}
-						debug("mesh[][] done!", getpid());
+						debug("threadboy=0 mesh build done!", getpid());
 						//讀取mesh.txt
 						sprintf(str, ".\\mesh\\mesh.txt");
 						fp = fopen(str, "r");
-						debug("mesh.txt open!", getpid());
+						debug("threadboy=0 mesh.txt open!", getpid());
 						for (i = 0; i < (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); i++)
 						{
 							fscanf(fp, "%lf%lf%lf%lf%lf%lf%lf%lf", &mesh[i][0], &mesh[i][1], &mesh[i][2], &non, &non, &non, &mesh[i][6], &mesh[i][7]);
 						}
 						fclose(fp);
-						debug("mesh[][] load done!", getpid());
+						debug("threadboy=0 mesh[][] load done!", getpid());
 					}
 				}
 				if (ite > 0)
@@ -1156,11 +1173,13 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 
 		free(bfkin.bfkin_hub);
-		if (ite == 0) {
-			if (threadboy == 1) {
+		if (ite == 0) //清除第0步輸出mesh.txt之process的矩陣
+		{
+			if (threadboy == 1) 
+			{
 				free(newsize); free(threadnumber);
-
-				for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i) {
+				for (i = 0; i != (bfkin.plane_x_numb * 4 * bfkin.plane_c_numb * bfkin.plane_r_numb); ++i) 
+				{
 					free(mesh[i]);
 				}
 				free(mesh);
@@ -1172,7 +1191,8 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 	
 
 
-		if (ite >= bfkin.itestar && ite % bfkin.ci == reitestar  && meshload == 0) {
+		if (ite >= bfkin.itestar && ite % bfkin.ci == reitestar  && meshload == 0)
+		{
 			if (threadboy == 1) 
 			{
 				free(newsize); free(threadnumber);

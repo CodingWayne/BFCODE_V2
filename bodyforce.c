@@ -10,7 +10,7 @@
 #include "OSfunc.h"
 #include <process.h>
 #include "parameter.h"
-
+#include <io.h>
 
 
 //[result]:the array of values returned by the user function.(Force/Volume);  [size]:the number of elements in the result array.(int);  [centroid]:網格中心點之座標;  [Velocity]:網格中心點之速度; [Iteration]:the iteration number in CoordReal precision.(int); [Angle]:船體pitch的徑度(艏仰為正); [Cell_id]:圓盤網格之編號; [Drag]:船殼阻力;
@@ -19,9 +19,6 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 	if (size != 0)
 	{
-
-
-
 		struct BFKIN bfkin;
 		struct PROP prop;
 
@@ -35,12 +32,12 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 		
 		if (ite == 0)
 		{
-			system("mkdir debug");
-			system("mkdir thread");
-			system("mkdir mesh");
-			system("mkdir propeller");
-			system("mkdir wake");
+			if (access("debug", 0))system("mkdir debug");
+			if (access("thread", 0))system("mkdir thread");
+			if (access("mesh", 0))system("mkdir mesh");
+			if (access("tmp", 0))system("mkdir tmp");
 		}
+
 		Load_bfkin(&bfkin);
 		reitestar = bfkin.itestar % bfkin.ci;
 		Output_bfkin(&bfkin, &reitestar, &pitch);
@@ -56,10 +53,10 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 		//==========================================================================================================
 
 		/*==========================================================================================================
-		*                                                     放入受力
+		*                                       每一步的前置作業      放入受力
 		* ==========================================================================================================
 		*/
-		if (ite > bfkin.itestar && bfkin.Unsteady_offon == 0 || ite > bfkin.itestar && bfkin.Unsteady_offon == 1 && ite <= bfkin.unsteady_c || ite > bfkin.itestar && bfkin.Unsteady_offon == 1 && ite > bfkin.unsteady_c + (bfkin.tnb * bfkin.ci) || ite >= bfkin.itestar && bfkin.P_3 == 1)
+		if (ite > bfkin.itestar )
 		{
 			debug("Steady Body Force Star!", getpid());
 			/*================================================================================================
@@ -265,8 +262,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						minCellid = (int)Cell_id[i][0];
 					}
 				}
-				fclose(fp);
-				debug("STEP[1]-2   output minCellid", getpid());
+				fclose(fp);		
 
 				MESH_STEP_2();
 				MESH_STEP_3();
@@ -581,7 +577,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 					}
 					fclose(fp);
 
-					debug("Induced Velocity Spline!", getpid());
+					debug(" Velocity Spline!", getpid());
 
 
 					/*==================================================================================================
@@ -1050,7 +1046,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						bfr[i] = fr[i] / (r_x[i + 1] - r_x[i]) * 0.5 * bfkin.rho * bfkin.Vs * bfkin.Vs * bfkin.R;
 						bft[i] = ft[i] / (r_x[i + 1] - r_x[i]) * 0.5 * bfkin.rho * bfkin.Vs * bfkin.Vs * bfkin.R;
 					}
-
+					ite = (int)Iteration[0][0];
 					//=====================================================輸出受力=============================================
 					sprintf(filename, "force_%d.txt", ite);
 					fp = fopen(filename, "w");

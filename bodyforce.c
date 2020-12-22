@@ -36,6 +36,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 			if (access("thread", 0))system("mkdir thread");
 			if (access("mesh", 0))system("mkdir mesh");
 			if (access("tmp", 0))system("mkdir tmp");
+			Sleep(100);
 		}
 
 		Load_bfkin(&bfkin);
@@ -353,6 +354,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						sprintf(str, "del .\\thread\\allthread%d.txt", threadnumber[0]);
 						system(str);
 						debug("threadboy=1 mesh load done!", getpid());
+
 					}
 				}
 				//

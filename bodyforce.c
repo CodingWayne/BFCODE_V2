@@ -535,6 +535,10 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						fscanf(fp, "%lf%lf", &non, &Vx_total[i]);
 					}
 					fclose(fp);
+
+					//J_Correcction(&Vx_total[0], & bfkin, &prop);
+
+
 					////////////////////////////////////////////////////////////////////////
 					fp = fopen("input.dat", "w");
 					for (i = 0; i != bfkin.plane_r_numb; ++i)
@@ -557,6 +561,8 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						fscanf(fp, "%lf%lf", &non, &Vt_total[i]);
 					}
 					fclose(fp);
+
+					//J_Correcction(&Vt_total[0], &bfkin, &prop);
 					///////////////////////////////////////////////////////////////////////
 					fp = fopen("input.dat", "w");
 					for (i = 0; i != bfkin.plane_r_numb; ++i)
@@ -581,6 +587,7 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 					debug(" Velocity Spline!", getpid());
 
+					//J_Correcction(&Vr_total[0], &bfkin, &prop);
 
 					/*==================================================================================================
 					* ==============================計算誘導速度並提取(徑像速度忽略不計)===================================
@@ -609,14 +616,16 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 						sprintf(cmd, "cmd.exe /c sfpv11.exe<sfpv11.kin");
 						outexe(cmd);
 						Sleep(1000);
-						fp = fopen("indvel0.dat", "r");
-						fgets(str, 50, fp);
-						fgets(str, 50, fp);
-						fgets(str, 60, fp);
-						for (i = 0; i != prop.MR; ++i)fscanf(fp, "%lf%lf%lf%lf%lf%lf", &r_U[i], &Ux[i], &Ur[i], &Ut[i], &non, &non);
+						//fp = fopen("indvel0.dat", "r");//舊版SFPV
+						fp = fopen("fpv.dat", "r");//新版SFPV
+						//fgets(str, 50, fp);舊版SFPV
+						//fgets(str, 50, fp);舊版SFPV
+						//fgets(str, 60, fp);舊版SFPV
+						//for (i = 0; i != prop.MR; ++i)fscanf(fp, "%lf%lf%lf%lf%lf%lf", &r_U[i], &Ux[i], &Ur[i], &Ut[i], &non, &non); 舊版SFPV
+						for (i = 0; i != prop.MR; ++i)fscanf(fp, "%lf%lf%lf%lf%lf%lf", &r_U[i], &Ux[i], &non, &non, &Ur[i], &Ut[i]); //新版SFPV
 						fclose(fp);
 
-						debug("sfpv calcu Induced Velocity Load!", getpid());
+						debug("SFPV21 fpv.dat load done!", getpid());
 						//將各徑向位置(MR)之誘導速度，藉由SPLINE.exe化為 NX 個點，點位置由XR:radii of the input geometry parameters for patpans11 決定
 						//Ux
 						fp = fopen("input.dat", "w");
@@ -677,6 +686,8 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 					{
 						//提取每一輪之前一步的drag
 						prop.ADVCO = bfkin.firstJ;
+						//prop.ADVCO = J_Correcction(&bfkin);
+						//debug("J Correction load!", getpid());
 						sprintf(filename, "XYZ_Internal_Table_table_%d.csv", ite);
 						fp2 = fopen(filename, "r");
 						fgets(str, 80, fp2);
@@ -718,8 +729,17 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 
 						debug("OUT　GEO  Done!", getpid());
 						//建立hXXX.adm，完全比照prop.adm
-						Output_ite_ADM();
-
+						//Output_ite_ADM();
+						 //tmp = J_Correcction(&bfkin, &prop);
+						sprintf(filename, "h%d.adm", ite);
+						fp = fopen(filename, "w");
+						fprintf(fp, adm1);
+						fprintf(fp, adm2);
+						fprintf(fp, adm3);
+						fprintf(fp, adm4);
+						fprintf(fp, adm5);
+						fprintf(fp, adm6);
+						fclose(fp);
 						//建立patpans11.kin
 						sprintf(filename, "h%d", ite);
 						fp = fopen("patpans11.kin", "w");
@@ -972,8 +992,18 @@ void USERFUNCTION_EXPORT bodyforce(Real(*result)[3], int size, CoordReal(*centro
 					fclose(fp);
 
 					//建立hXXX.adm，完全比照prop.adm
-					Output_ite_ADM();
-
+					//Output_ite_ADM();
+					//adm_rev( &bfkin, &prop);
+					// tmp = J_Correcction(&bfkin, &prop);
+					sprintf(filename, "h%d.adm", ite);
+					fp = fopen(filename, "w");
+					fprintf(fp, adm1);
+					fprintf(fp, adm2);
+					fprintf(fp, adm3);
+					fprintf(fp, adm4);
+					fprintf(fp, adm5);
+					fprintf(fp, adm6);
+					fclose(fp);
 					/*========================================================================================================
 					*                                   輸出周向平均速度、誘導速度、兩相減後速度
 					* ========================================================================================================

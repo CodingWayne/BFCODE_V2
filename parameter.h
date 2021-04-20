@@ -19,6 +19,7 @@ struct BFKIN
 	double firstJ;
 	int bodyforce_offon;
 	int P_3;
+	
 
 	int Unsteady_offon;
 	int unsteady_c;
@@ -65,8 +66,9 @@ struct PROP
 	double** NPARAMETER;//NPARAMETER[][]:用以儲存prop.geo第四行之後的數值;
 };
 void Load_PROP_GEO(struct PROP* prop);
-
-
+double J_Correcction( struct BFKIN* bfkin, struct PROP* prop);
+double J_Correcction_coe[5];
+void adm_rev( struct BFKIN* bfkin, struct PROP* prop);
 //--------------------------------------------------------------------------------
 double  pitch;
 FILE* fp5, * fp3, * fp, * fp1, * fp2;
@@ -90,6 +92,7 @@ double HULLDRAG, THRUST, THRUST0, KT, KT0, ADVCO0, Error, W, Err, Err0;
 double Ktoj, ja;
 //Cx, Cr, Ct:用以儲存體積力在徑向分佈化為的6個係數(C0~C5); Tn:用以儲存體積力在徑向分佈化為的6個係數的單變數函數(T0~T6); sum:用於儲存體積力公式裡之CnTn總和;origin 儲存體積力
 double  Cx[6], Cr[6], Ct[6], Tn[6], sum, originfx, originfr, originft;
+double tmp;//tmp儲存adm降速修正值
 /*-------------------------網格變數------------------------------------------------------
  *meshload為判斷變數，抓完網格後=1
  *minCellid為最小網格編號

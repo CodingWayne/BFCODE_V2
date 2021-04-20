@@ -34,6 +34,7 @@ void Output_bfkin(struct BFKIN* bfkin, int* reitestar, double* pitch)
 	fprintf(fp3, "wake_onite=%d\n", bfkin->wake_onite);
 	fprintf(fp3, "firstJ_offon=%d\n", bfkin->firstJ_offon);
 	fprintf(fp3, "firstJ=%lf\n", bfkin->firstJ);
+	
 	fprintf(fp3, "R=%lf\n", bfkin->R);
 	fprintf(fp3, "x=%lf\n", bfkin->x);
 	fprintf(fp3, "xp=%lf\n", bfkin->xp);
@@ -97,6 +98,20 @@ void Output_ite_ADM()
 	fprintf(fp, adm6);
 	fclose(fp);
 }
+void adm_rev( struct BFKIN* bfkin, struct PROP* prop)
+{
+	double tmp = J_Correcction( &bfkin, &prop);
+	sprintf(filename, "h%d.adm", ite);
+	fp = fopen(filename, "w");
+	fprintf(fp, adm1);
+	fprintf(fp, adm2);	
+	fprintf(fp, "1 %.3lf 0 0\n", tmp);
+	fprintf(fp, adm4);
+	fprintf(fp, adm5);
+	fprintf(fp, adm6);
+	fclose(fp);
+
+}
 void Load_PROP_GEO(struct PROP* prop)
 {
 	sprintf(geoname, "prop.geo");
@@ -123,7 +138,28 @@ void Load_PROP_GEO(struct PROP* prop)
 	debug("*.geo load!", getpid());
 }
 
+double J_Correcction(struct BFKIN* bfkin, struct PROP* prop)
+{
+	double temp;
+	fp2 = fopen("J_Correction.dat", "r");
+	for (i = 0; i < 5; i++)
+	{
+		fscanf(fp2, "%lf", &J_Correcction_coe[i]);
+	}
+	fclose(fp2);
 
+	
+	
+	temp = J_Correcction_coe[0] * pow(prop->ADVCO, 4) + J_Correcction_coe[1] * pow(prop->ADVCO, 3) + J_Correcction_coe[2] * pow(prop->ADVCO, 2) + J_Correcction_coe[3] * pow(prop->ADVCO, 1) + J_Correcction_coe[4];
+	 
+	
+	if (temp > 1.0)
+	{
+		temp = 1.0;
+	}
+
+	return temp;
+}
 
 
 void MESH_STEP_2()
